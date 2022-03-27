@@ -36,4 +36,20 @@ const createAuction = async (title:string, description:string, endDate:string, i
     return result;
 };
 
-export { getAuctions, createAuction }
+const getAuctionById = async (auctionId:number): Promise<Auction> => {
+    const conn = await getPool().getConnection();
+    const query = `SELECT
+    auction.id AS auctionId, title, category_id AS categoryId, seller_id AS sellerId, user.first_name AS sellerFirstName,
+        user.last_name AS sellerLastName, reserve, COUNT(auction_bid.id) AS numBids, MAX(auction_bid.amount) AS highestBid,
+        end_date AS endDate, description
+    FROM auction
+    LEFT JOIN auction_bid ON auction.id = auction_bid.auction_id
+    LEFT JOIN user ON user.id = auction.seller_id
+    WHERE auction.id = ?
+    GROUP BY auction.id`;
+    const [ result ] = await conn.query( query, [ auctionId ] );
+    conn.release();
+    return result[0];
+};
+
+export { getAuctions, createAuction, getAuctionById }

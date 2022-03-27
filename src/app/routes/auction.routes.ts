@@ -10,7 +10,7 @@ module.exports = (app: Express) => {
         .post(authenticate.loginRequired, auctions.create);
 
     app.route(rootUrl + '/auctions/:id')
-        .get()
+        .get(auctions.get)
         .patch(authenticate.loginRequired)
         .delete(authenticate.loginRequired);
 

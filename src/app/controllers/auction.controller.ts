@@ -56,10 +56,10 @@ const getAll = async (req: Request, res: Response):Promise<void> => {
                 })
                 break;
             case SortFilters.BIDS_ASC:
-
+                result.sort((a, b) => a.numBids - b.numBids)
                 break;
             case SortFilters.BIDS_DESC:
-
+                result.sort((a, b) => b.numBids - a.numBids)
                 break;
             case SortFilters.CLOSING_SOON:
                 result.sort((a, b) => {
@@ -74,17 +74,25 @@ const getAll = async (req: Request, res: Response):Promise<void> => {
                 })
                 break;
             case SortFilters.CLOSING_LAST:
+                result.sort((a, b) => {
+                    if (a.endDate < b.endDate) {
+                        return 1;
+                    }
+                    if (a.endDate > b.endDate) {
+                        return -1;
+                    }
 
+                    return 0;
+                })
                 break;
             case SortFilters.RESERVE_ASC:
-
+                result.sort((a, b) => a.reserve - b.reserve)
                 break;
             case SortFilters.RESERVE_DESC:
-
-                break;
-            default:
+                result.sort((a, b) => b.reserve - a.reserve)
                 break;
         }
+
         res.status(200).send({"auctions": result, "count": result.length});
     }  catch (err) {
         Logger.error(err);
@@ -153,7 +161,7 @@ const create = async (req: Request, res: Response):Promise<void> => {
         }
 
         res.statusMessage = "Created";
-        res.status(201).send({"userId": result.insertId});
+        res.status(201).send({"auctionId": result.insertId});
     } catch (err) {
         Logger.error(err);
         res.statusMessage = "Internal Server Error";
@@ -161,4 +169,26 @@ const create = async (req: Request, res: Response):Promise<void> => {
     }
 };
 
-export {getAll, create}
+const get = async (req: Request, res: Response): Promise<void> => {
+    Logger.http(`GET user with id: ${req.params.id}`);
+
+    if (isNaN(parseInt(req.params.id, 10))) {
+        res.statusMessage = "Bad Request";
+        res.status(400).send()
+        return;
+    }
+
+    const id = parseInt(req.params.id, 10);
+
+    try {
+        const result = await auctions.getAuctionById(id);
+        res.statusMessage = "OK";
+        res.status(200).send(result);
+    } catch (err) {
+        Logger.error(err);
+        res.statusMessage = "Internal Server Error";
+        res.status(500).send();
+    }
+}
+
+export {getAll, create, get}

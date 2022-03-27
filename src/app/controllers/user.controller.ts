@@ -132,7 +132,7 @@ const retrieve = async (req: Request, res: Response):Promise<void> => {
         res.status(400).send()
         return;
     }
-    const id = Number(req.params.id);
+    const id = parseInt(req.params.id, 10);
     try {
         const result = await users.getUser(id);
 

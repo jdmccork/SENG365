@@ -111,21 +111,8 @@ const login = async (req: Request, res: Response):Promise<void> => {
 
 const logout = async (req: Request, res: Response):Promise<void> => {
     Logger.http(`POST logout`);
-    if (req.header("X-Authorization") === null) {
-        res.statusMessage = "Unauthorized";
-        res.status(401).send("No authorization token provided");
-        return;
-    }
-
-    const authToken = req.header("X-Authorization")
     try {
-        const result = await users.logout(authToken);
-
-        if (result.affectedRows !== 1) {
-            res.statusMessage = "Unauthorized";
-            res.status(401).send("No user with that token")
-            return;
-        }
+        const result = await users.logout(parseInt(req.params.authenticatedUserId, 10));
 
         res.statusMessage = "OK";
         res.status(200).send("Logged out successfully");
@@ -140,9 +127,9 @@ const logout = async (req: Request, res: Response):Promise<void> => {
 const retrieve = async (req: Request, res: Response):Promise<void> => {
     Logger.http(`GET user with id: ${req.params.id}`);
 
-    if (isNaN(Number(req.params.id))) {
+    if (isNaN(parseInt(req.params.id, 10))) {
         res.statusMessage = "Bad Request";
-        res.status(400).send("Id must be a number")
+        res.status(400).send()
         return;
     }
     const id = Number(req.params.id);

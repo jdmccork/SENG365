@@ -21,10 +21,10 @@ const login = async (email:string, password:string, token:string): Promise<Resul
     return result;
 };
 
-const logout = async (token:string): Promise<ResultSetHeader> => {
+const logout = async (userId:number): Promise<ResultSetHeader> => {
     const conn = await getPool().getConnection();
-    const query = 'UPDATE user SET auth_token = NULL WHERE auth_token = ?';
-    const [ result ] = await conn.query( query, [ token ] );
+    const query = 'UPDATE user SET auth_token = NULL WHERE id = ?';
+    const [ result ] = await conn.query( query, [ userId ] );
     conn.release();
     return result;
 };

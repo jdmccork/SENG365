@@ -2,6 +2,7 @@ import {Express} from "express";
 import {rootUrl} from "./base.routes"
 
 import * as users from '../controllers/user.controller';
+import * as authenticate from '../middleware/authenticate.middleware'
 
 module.exports = (app: Express) => {
     app.route(rootUrl + '/users/register')
@@ -11,9 +12,9 @@ module.exports = (app: Express) => {
         .post(users.login);
 
     app.route(rootUrl + '/users/logout')
-        .post(users.logout);
+        .post(authenticate.loginRequired, users.logout);
 
     app.route(rootUrl + '/users/:id')
         .get(users.retrieve)
-        .patch(users.alter);
+        .patch(authenticate.loginRequired, users.alter);
 };

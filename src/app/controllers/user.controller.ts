@@ -1,4 +1,6 @@
 import {Request, Response} from "express";
+import { fs } from "mz";
+import path from "path";
 import Logger from '../../config/logger';
 import * as users from '../models/user.model';
 
@@ -136,14 +138,14 @@ const retrieve = async (req: Request, res: Response):Promise<void> => {
     try {
         const result = await users.getUser(id);
 
-        if (result.length !== 1) {
+        if (result === null) {
             res.statusMessage = "Not Found";
             res.status(404).send("User not found")
             return;
         }
 
         res.statusMessage = "OK";
-        const user = result[0];
+        const user = result;
         if (user.auth_token === req.header("X-Authorization")) {
             res.status(200).send({"firstName":user.first_name, "lastName":user.last_name, "email":user.email})
         return;
@@ -228,4 +230,128 @@ const alter = async (req: Request, res: Response):Promise<void> => {
     }
 }
 
-export {create, login, logout, retrieve, alter}
+const getImage = async (req:Request, res:Response):Promise<void> => {
+
+    try {
+        if (isNaN(parseInt(req.params.id, 10))) {
+            res.statusMessage = "Bad Request";
+            res.status(400).send()
+            return;
+        }
+        const id = parseInt(req.params.id, 10);
+        const user = await users.getUser(id);
+
+        if (user == null) {
+            res.statusMessage = "Not Found";
+            res.status(404).send();
+            return;
+        }
+
+        if (user.image_filename == null) {
+            res.statusMessage = "Not Found";
+            res.status(404).send();
+            return;
+        }
+
+        res.statusMessage = "OK";
+        res.status(200).sendFile(path.resolve("./storage/images/" + user.image_filename));
+    } catch (err) {
+        Logger.error(err);
+        res.statusMessage = "Internal Server Error";
+        res.status(500).send();
+    }
+}
+
+const setImage = async (req:Request, res:Response):Promise<void> => {
+    try {
+        const authenticatedUserId = parseInt(req.params.authenticatedUserId, 10);
+
+        if (isNaN(parseInt(req.params.id, 10))) {
+            res.statusMessage = "Bad Request";
+            res.status(400).send()
+            return;
+        }
+
+        const id = parseInt(req.params.id, 10);
+        const user = await users.getUser(id);
+
+        if (user == null) {
+            res.statusMessage = "Not Found";
+            res.status(404).send();
+            return;
+        }
+
+        if (user.id !== authenticatedUserId) {
+            res.statusMessage = "Forbidden";
+            res.status(403).send();
+            return;
+        }
+
+        let extention = "";
+        if (req.is("image/png")) {
+            extention = ".png";
+        } else if (req.is("image/jpeg")) {
+            extention = ".jpg";
+        } else if (req.is("image/gif")) {
+            extention = ".gif";
+        } else {
+            res.statusMessage = "Bad Request";
+            res.status(400).send();
+            return;
+        }
+        Logger.debug(req.body);
+        const buf = Buffer.from(req.body.toString('binary'),'binary');
+        fs.writeFile(path.resolve("./storage/images/user_" + id + extention), buf);
+
+        if (user.image_filename == null) {
+            users.addImageById("user_" + id + extention, id);
+            res.statusMessage = "Created";
+            res.status(201).send();
+            return;
+        }
+        res.statusMessage = "OK";
+        res.status(200).send();
+    } catch (err){
+        Logger.error(err);
+        res.statusMessage = "Internal Server Error";
+        res.status(500).send();
+    }
+}
+
+const deleteImage = async (req:Request, res:Response):Promise<void> => {
+    try {
+        const authenticatedUserId = parseInt(req.params.authenticatedUserId, 10);
+
+        if (isNaN(parseInt(req.params.id, 10))) {
+            res.statusMessage = "Bad Request";
+            res.status(400).send()
+            return;
+        }
+
+        const id = parseInt(req.params.id, 10);
+        const user = await users.getUser(id);
+
+        if (user == null) {
+            res.statusMessage = "Not Found";
+            res.status(404).send();
+            return;
+        }
+
+        if (user.id !== authenticatedUserId) {
+            res.statusMessage = "Forbidden";
+            res.status(403).send();
+            return;
+        }
+
+        users.deleteImage(id);
+
+        res.statusMessage = "OK";
+        res.status(200).send();
+    } catch (err){
+        Logger.error(err);
+        res.statusMessage = "Internal Server Error";
+        res.status(500).send();
+    }
+}
+
+export {create, login, logout, retrieve, alter, getImage, setImage, deleteImage}

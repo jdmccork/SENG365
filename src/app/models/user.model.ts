@@ -37,12 +37,12 @@ const getUserByToken = async (token:string): Promise<User[]> => {
     return result;
 }
 
-const getUser = async (id:number): Promise<User[]> => {
+const getUser = async (id:number): Promise<User> => {
     const conn = await getPool().getConnection();
     const query = 'SELECT * FROM user WHERE id = ?';
     const [ result ] = await conn.query( query, [ id ] );
     conn.release();
-    return result;
+    return result[0];
 }
 
 const alterUser = async (id:number, firstName:string, lastName:string, email:string, password:string): Promise<ResultSetHeader> => {
@@ -53,4 +53,20 @@ const alterUser = async (id:number, firstName:string, lastName:string, email:str
     return result;
 }
 
-export {createUser, login, logout, getUserByToken, getUser, alterUser}
+const addImageById = async (imageFilename:string, userId:number): Promise<ResultSetHeader> => {
+    const conn = await getPool().getConnection();
+    const query = `UPDATE user SET image_filename = ? WHERE id = ?`;
+    const [ result ] = await conn.query( query, [ imageFilename, userId ] );
+    conn.release();
+    return result;
+}
+
+const deleteImage = async (userId:number): Promise<ResultSetHeader> => {
+    const conn = await getPool().getConnection();
+    const query = `UPDATE user SET image_filename = ? WHERE id = ?`;
+    const [ result ] = await conn.query( query, [ null, userId ] );
+    conn.release();
+    return result;
+}
+
+export {createUser, login, logout, getUserByToken, getUser, alterUser, addImageById, deleteImage}

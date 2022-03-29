@@ -7,6 +7,7 @@ export default () => {
     const app = express();
     // MIDDLEWARE
     app.use(allowCrossOriginRequestsMiddleware);
+    app.use(bodyParser.raw({limit: "50mb", type: ['image/jpeg', 'image/png', 'image/gif']}));
     app.use(bodyParser.json());
     app.use(bodyParser.raw({ type: 'text/plain' }));  // for the /executeSql endpoint
 

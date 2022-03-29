@@ -40,7 +40,7 @@ const getAuctionById = async (auctionId:number): Promise<Auction> => {
     const conn = await getPool().getConnection();
     const query = `SELECT
     auction.id AS auctionId, title, category_id AS categoryId, seller_id AS sellerId, user.first_name AS sellerFirstName,
-        user.last_name AS sellerLastName, reserve, COUNT(auction_bid.id) AS numBids, MAX(auction_bid.amount) AS highestBid,
+        user.last_name AS sellerLastName, auction.image_filename AS imageFilename, reserve, COUNT(auction_bid.id) AS numBids, MAX(auction_bid.amount) AS highestBid,
         end_date AS endDate, description
     FROM auction
     LEFT JOIN auction_bid ON auction.id = auction_bid.auction_id
@@ -52,4 +52,31 @@ const getAuctionById = async (auctionId:number): Promise<Auction> => {
     return result[0];
 };
 
-export { getAuctions, createAuction, getAuctionById }
+const editAuctionById = async (auctionId:number, title:string, description:string, reserve:number, endDate:string, categoryId:number): Promise<ResultSetHeader> => {
+    const conn = await getPool().getConnection();
+    const query = `
+    UPDATE auction
+        SET title = ?, category_id = ?, reserve = ?, end_date = ?, description = ?
+        WHERE id = ?`;
+    const [ result ] = await conn.query( query, [ title, categoryId, reserve, endDate, description, auctionId ] );
+    conn.release();
+    return result;
+}
+
+const deleteAuctionById = async (auctionId:number): Promise<ResultSetHeader> => {
+    const conn = await getPool().getConnection();
+    const query = `DELETE FROM auction WHERE id = ?`;
+    const [ result ] = await conn.query( query, [ auctionId ] );
+    conn.release();
+    return result;
+}
+
+const addImageById = async (imageFilename:string, auctionId:number): Promise<ResultSetHeader> => {
+    const conn = await getPool().getConnection();
+    const query = `UPDATE auction SET image_filename = ? WHERE id = ?`;
+    const [ result ] = await conn.query( query, [ imageFilename, auctionId ] );
+    conn.release();
+    return result;
+}
+
+export { getAuctions, createAuction, getAuctionById, editAuctionById, deleteAuctionById, addImageById }

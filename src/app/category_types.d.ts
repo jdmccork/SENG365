@@ -6,5 +6,5 @@ type Category = {
     /**
      * Category name as entered when created
      */
-    first_name: string
+    name: string
 }

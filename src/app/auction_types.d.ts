@@ -46,5 +46,5 @@ type Auction = {
     /**
      * Users image file location
      */
-    imageFilename: string,
+    imageFilename: string
 }

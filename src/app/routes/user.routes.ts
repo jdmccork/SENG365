@@ -17,4 +17,9 @@ module.exports = (app: Express) => {
     app.route(rootUrl + '/users/:id')
         .get(users.retrieve)
         .patch(authenticate.loginRequired, users.alter);
+
+    app.route(rootUrl + '/users/:id/image')
+        .get(users.getImage)
+        .put(authenticate.loginRequired, users.setImage)
+        .delete(authenticate.loginRequired, users.deleteImage);
 };

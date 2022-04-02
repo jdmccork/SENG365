@@ -25,4 +25,25 @@ const loginRequired = async (req: Request, res: Response, next: NextFunction):Pr
     }
 }
 
-export {loginRequired}
+const loginOptional = async (req: Request, res: Response, next: NextFunction):Promise<void> => {
+    try {
+        if (req.header("X-Authorization") === null) {
+            next();
+            return;
+        }
+        const token = req.header("X-Authorization");
+        const userResult = await users.getUserByToken(token);
+        if (userResult.length === 0) {
+            next();
+            return;
+        }
+        req.params.authenticatedUserId = userResult[0].id.toString();
+        next();
+    } catch (err) {
+        Logger.error(err);
+        res.statusMessage = "Internal Server Error";
+        res.status(500).send();
+    }
+}
+
+export {loginRequired, loginOptional}

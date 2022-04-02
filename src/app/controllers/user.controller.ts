@@ -3,67 +3,54 @@ import { fs } from "mz";
 import path from "path";
 import Logger from '../../config/logger';
 import * as users from '../models/user.model';
+import randtoken from 'rand-token';
+import bcrypt from 'bcrypt';
+
 
 function validateEmail(email: string) {
     const re = /^(([^<>()[\]\\.,;:\s@"]+(\.[^<>()[\]\\.,;:\s@"]+)*)|(".+"))@((\[[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}])|(([a-zA-Z\-0-9]+\.)+[a-zA-Z]{2,}))$/;
     return re.test(email);
 }
 
-async function createToken() {
-    let token = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
-    let result = await users.getUserByToken(token);
-    while (result.length !== 0) {
-        token = Math.random().toString(36).substring(2, 15) + Math.random().toString(36).substring(2, 15);
-        result = await users.getUserByToken(token);
-    }
-
-    return token;
+function validateExists(fields: string[], req:Request):boolean {
+    let result = true;
+    fields.forEach(field => {
+        if (!req.body.hasOwnProperty(field)) {
+            result = false;
+        }
+    });
+    return result;
 }
 
 const create = async (req: Request, res: Response):Promise<void> => {
-    if (!req.body.hasOwnProperty("firstName")) {
-        res.statusMessage = "Bad Request";
-        res.status(400).send("Please provide a first name.")
-        return
-    }
-
-    if (!req.body.hasOwnProperty("lastName")) {
-        res.statusMessage = "Bad Request";
-        res.status(400).send("Please provide a last name.")
-        return
-    }
-
-    if (!req.body.hasOwnProperty("email")) {
-        res.statusMessage = "Bad Request";
-        res.status(400).send("Please provide an email address.")
-        return
-    }
-
-    if (!req.body.hasOwnProperty("password")) {
-        res.statusMessage = "Bad Request";
-        res.status(400).send("Please provide a password.")
-        return
-    }
-
-    const email = req.body.email;
-
-    if (!validateEmail(req.body.email)) {
-        res.statusMessage = "Bad Request";
-        res.status(400).send("Please provide a valid email address.")
-        return
-    }
-
-    const firstName = req.body.firstName;
-    const lastName = req.body.lastName;
-    const password = req.body.password;
-
     try {
-        const result = await users.createUser(firstName, lastName, email, password);
-        if (result.affectedRows === 0) {
+        if (!validateExists(["firstName", "lastName", "email", "password"], req)) {
             res.statusMessage = "Bad Request";
-            res.status(400).send("Email must not already be in use.");
+            res.status(400).send();
             return;
         }
+
+        if (!validateEmail(req.body.email)) {
+            res.statusMessage = "Bad Request";
+            res.status(400).send()
+            return
+        }
+
+        const firstName = req.body.firstName;
+        const lastName = req.body.lastName;
+        const email = req.body.email;
+        const salt = await bcrypt.genSalt(10);
+        const password = await bcrypt.hash(req.body.password, salt);
+
+        const user = await users.getUserByEmail(email);
+
+        if (user != null) {
+            res.statusMessage = "Bad Request";
+            res.status(400).send();
+            return;
+        }
+
+        const result = await users.createUser(firstName, lastName, email, password);
 
         res.statusMessage = "Created";
         res.status(201).send({"userId": result.insertId});
@@ -75,35 +62,35 @@ const create = async (req: Request, res: Response):Promise<void> => {
 };
 
 const login = async (req: Request, res: Response):Promise<void> => {
-    Logger.http(`POST login`);
-
-    if (!req.body.hasOwnProperty("email")) {
-        res.statusMessage = "Bad Request";
-        res.status(400).send("Please provide an email address.");
-        return;
-    }
-
-    if (!req.body.hasOwnProperty("password")) {
-        res.statusMessage = "Bad Request";
-        res.status(400).send("Please provide a password.");
-        return;
-    }
-
-    const email = req.body.email;
-    const password = req.body.password;
-
     try {
-        const token = await createToken();
-        const result = await users.login(email, password, token);
-        if (result.affectedRows !== 1) {
+        if (!validateExists(["email", "password"], req)) {
             res.statusMessage = "Bad Request";
-            res.status(400).send("User doesn't exist.")
+            res.status(400).send();
             return;
         }
 
-        const userResult = await users.getUserByToken(token);
+        const email = req.body.email;
+        const user = await users.getUserByEmail(email);
+
+        if (user == null) {
+            res.statusMessage = "Bad Request";
+            res.status(400).send();
+            return;
+        }
+
+        const validPassword = await bcrypt.compare(req.body.password, user.password);
+        if (!validPassword) {
+            res.statusMessage = "Bad Request";
+            res.status(400).send();
+            return;
+        }
+
+        const token = randtoken.generate(16);
+
+        await users.login(email, token);
+
         res.statusMessage = "OK";
-        res.status(200).send({"userId": userResult[0].id, "token": token});
+        res.status(200).send({"userId": user.id, "token": token});
     } catch (err) {
         Logger.error(err);
         res.statusMessage = "Internal Server Error";
@@ -112,9 +99,8 @@ const login = async (req: Request, res: Response):Promise<void> => {
 }
 
 const logout = async (req: Request, res: Response):Promise<void> => {
-    Logger.http(`POST logout`);
     try {
-        const result = await users.logout(parseInt(req.params.authenticatedUserId, 10));
+        await users.logout(Number(req.params.authenticatedUserId));
 
         res.statusMessage = "OK";
         res.status(200).send("Logged out successfully");
@@ -127,28 +113,21 @@ const logout = async (req: Request, res: Response):Promise<void> => {
 }
 
 const retrieve = async (req: Request, res: Response):Promise<void> => {
-    Logger.http(`GET user with id: ${req.params.id}`);
-
-    if (isNaN(parseInt(req.params.id, 10))) {
-        res.statusMessage = "Bad Request";
-        res.status(400).send()
-        return;
-    }
-    const id = parseInt(req.params.id, 10);
     try {
-        const result = await users.getUser(id);
+        const id = Number(req.params.id);
+        const authId = Number(req.params.authenticatedUserId);
+        const user = await users.getUser(id);
 
-        if (result === null) {
+        if (user === null) {
             res.statusMessage = "Not Found";
-            res.status(404).send("User not found")
+            res.status(404).send()
             return;
         }
 
         res.statusMessage = "OK";
-        const user = result;
-        if (user.auth_token === req.header("X-Authorization")) {
+        if (id === authId) {
             res.status(200).send({"firstName":user.first_name, "lastName":user.last_name, "email":user.email})
-        return;
+            return;
         }
 
         res.status(200).send({"firstName":user.first_name, "lastName":user.last_name})
@@ -160,54 +139,41 @@ const retrieve = async (req: Request, res: Response):Promise<void> => {
 }
 
 const alter = async (req: Request, res: Response):Promise<void> => {
-    Logger.http(`POST modify user with id: ${req.params.id}`);
-
-    if (req.header("X-Authorization") === null) {
-        res.statusMessage = "Unauthorized";
-        res.status(401).send("No authorization token provided");
-        return;
-    }
-
-    if (!req.body.hasOwnProperty("currentPassword")) {
-        res.statusMessage = "Forbidden";
-        res.status(403).send("Please provide a password.");
-        return;
-    }
-    if (isNaN(Number(req.params.id))) {
-        res.statusMessage = "Bad Request";
-        res.status(400).send("Id must be a number")
-        return;
-    }
-    const id = Number(req.params.id);
-    const currentPassword = req.body.currentPassword;
-    const token = req.header("X-Authorization");
     try {
-
-        const userResult = await users.getUserByToken(token);
-        if (userResult.length === 0) {
+        const id = Number(req.params.id);
+        const authId = Number(req.params.authenticatedUserId);
+        if (authId !== id) {
             res.statusMessage = "Unauthorized";
-            res.status(401).send("Invalid session token");
+            res.status(403).send();
+            return;
         }
 
-        const user = userResult[0];
-        if (user.id !== id) {
-            res.statusMessage = "Forbidden";
-            res.status(403).send("Cannot alter another user");
+        if (!req.body.hasOwnProperty("currentPassword")) {
+            res.statusMessage = "Bad Request";
+            res.status(400).send();
+            return;
         }
 
-        if (currentPassword !== user.password) {
+        const userResult = await users.getUser(id);
+        const user = userResult;
+        const validPassword = await bcrypt.compare(req.body.currentPassword, user.password);
+
+        if (!validPassword) {
             res.statusMessage = "Forbidden";
-            res.status(403).send("Incorrect password");
+            res.status(403).send();
+            return;
         }
 
         const firstName = req.body.hasOwnProperty("firstName") ? req.body.firstName : user.first_name;
         const lastName = req.body.hasOwnProperty("lastName") ? req.body.lastName : user.last_name;
         const password = req.body.hasOwnProperty("password") ? req.body.password : user.password;
         let email = user.email;
+
         if (req.body.hasOwnProperty("email")) {
             if (!validateEmail(req.body.email)) {
                 res.statusMessage = "Bad Request";
-                res.status(400).send("Invalid email format");
+                res.status(400).send();
+                return;
             }
 
             email = req.body.email;
@@ -217,7 +183,7 @@ const alter = async (req: Request, res: Response):Promise<void> => {
 
         if (alterResult.affectedRows !== 1) {
             res.statusMessage = "Not Found";
-            res.status(404).send("User not found")
+            res.status(404).send()
             return;
         }
 
@@ -231,14 +197,8 @@ const alter = async (req: Request, res: Response):Promise<void> => {
 }
 
 const getImage = async (req:Request, res:Response):Promise<void> => {
-
     try {
-        if (isNaN(parseInt(req.params.id, 10))) {
-            res.statusMessage = "Bad Request";
-            res.status(400).send()
-            return;
-        }
-        const id = parseInt(req.params.id, 10);
+        const id = Number(req.params.id);
         const user = await users.getUser(id);
 
         if (user == null) {
@@ -264,26 +224,20 @@ const getImage = async (req:Request, res:Response):Promise<void> => {
 
 const setImage = async (req:Request, res:Response):Promise<void> => {
     try {
-        const authenticatedUserId = parseInt(req.params.authenticatedUserId, 10);
+        const authenticatedUserId = Number(req.params.authenticatedUserId);
 
-        if (isNaN(parseInt(req.params.id, 10))) {
-            res.statusMessage = "Bad Request";
-            res.status(400).send()
+        const id = Number(req.params.id);
+        if (id !== authenticatedUserId) {
+            res.statusMessage = "Forbidden";
+            res.status(403).send();
             return;
         }
 
-        const id = parseInt(req.params.id, 10);
         const user = await users.getUser(id);
 
         if (user == null) {
             res.statusMessage = "Not Found";
             res.status(404).send();
-            return;
-        }
-
-        if (user.id !== authenticatedUserId) {
-            res.statusMessage = "Forbidden";
-            res.status(403).send();
             return;
         }
 
@@ -299,18 +253,30 @@ const setImage = async (req:Request, res:Response):Promise<void> => {
             res.status(400).send();
             return;
         }
-        Logger.debug(req.body);
-        const buf = Buffer.from(req.body.toString('binary'),'binary');
-        fs.writeFile(path.resolve("./storage/images/user_" + id + extention), buf);
 
-        if (user.image_filename == null) {
-            users.addImageById("user_" + id + extention, id);
+        const buf = Buffer.from(req.body.toString('binary'),'binary');
+
+        let fileId = id;
+        let location = path.resolve("./storage/images/user_" + fileId + extention);
+        if (user.image_filename === null || user.image_filename.length === 0) {
             res.statusMessage = "Created";
-            res.status(201).send();
-            return;
+            res.status(201);
+        } else {
+            location = path.resolve("./storage/images/" + user.image_filename);
+            fs.unlinkSync(location)
+            location = path.resolve("./storage/images/uesr_" + fileId + extention);
+            res.statusMessage = "OK";
+            res.status(200);
         }
-        res.statusMessage = "OK";
-        res.status(200).send();
+        while (fs.existsSync(location)) {
+            fileId += 1;
+            location = path.resolve("./storage/images/user_" + fileId + extention);
+        }
+
+        fs.writeFile(location, buf);
+        users.addImageById("user_" + fileId + extention, id);
+
+        res.send();
     } catch (err){
         Logger.error(err);
         res.statusMessage = "Internal Server Error";
@@ -320,15 +286,15 @@ const setImage = async (req:Request, res:Response):Promise<void> => {
 
 const deleteImage = async (req:Request, res:Response):Promise<void> => {
     try {
-        const authenticatedUserId = parseInt(req.params.authenticatedUserId, 10);
+        const authenticatedUserId = Number(req.params.authenticatedUserId);
 
-        if (isNaN(parseInt(req.params.id, 10))) {
-            res.statusMessage = "Bad Request";
-            res.status(400).send()
+        const id = Number(req.params.id);
+        if (id !== authenticatedUserId) {
+            res.statusMessage = "Forbidden";
+            res.status(403).send();
             return;
         }
 
-        const id = parseInt(req.params.id, 10);
         const user = await users.getUser(id);
 
         if (user == null) {
@@ -337,13 +303,9 @@ const deleteImage = async (req:Request, res:Response):Promise<void> => {
             return;
         }
 
-        if (user.id !== authenticatedUserId) {
-            res.statusMessage = "Forbidden";
-            res.status(403).send();
-            return;
-        }
-
         users.deleteImage(id);
+
+        fs.unlinkSync(path.resolve("./storage/images/" + user.image_filename));
 
         res.statusMessage = "OK";
         res.status(200).send();

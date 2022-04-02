@@ -17,12 +17,4 @@ module.exports = (app: Express) => {
         .get(validation.pathId, auctions.get)
         .patch(authenticate.loginRequired, validation.pathId, auctions.edit)
         .delete(authenticate.loginRequired, validation.pathId, auctions.remove);
-
-    app.route(rootUrl + '/auctions/:id/bids')
-        .get(validation.pathId, auctions.getBids)
-        .post(authenticate.loginRequired, validation.pathId, auctions.placeBid)
-
-    app.route(rootUrl + '/auctions/:id/image')
-        .get(validation.pathId, auctions.getImage)
-        .put(authenticate.loginRequired, validation.pathId, auctions.setImage)
 };

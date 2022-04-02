@@ -7,8 +7,8 @@ import path from "path";
 import { fs } from "mz";
 
 const getAll = async (req: Request, res: Response):Promise<void> => {
-    const startIndex = req.query.hasOwnProperty("startIndex") ? parseInt(req.query.startIndex as string, 10) : 0;
-    const count = req.query.hasOwnProperty("count") ? parseInt(req.query.count as string, 10) : null;
+    const startIndex = req.query.hasOwnProperty("startIndex") ? Number(req.query.startIndex as string) : 0;
+    const count = req.query.hasOwnProperty("count") ? Number(req.query.count as string) : null;
     const searchTerm = req.query.hasOwnProperty("q") ? req.query.q as string : "";
 
     let categoryIds = req.query.hasOwnProperty("categoryIds") ? req.query.categoryIds as string[] : null;
@@ -16,9 +16,19 @@ const getAll = async (req: Request, res: Response):Promise<void> => {
         categoryIds = [req.query.categoryIds as string]
     }
 
-    const sellerId = req.query.hasOwnProperty("sellerId") ? parseInt(req.query.sellerId as string, 10) : null;
-    const bidderId = req.query.hasOwnProperty("bidderId") ? parseInt(req.query.bidderId as string, 10) : null;
+    const sellerId = req.query.hasOwnProperty("sellerId") ? Number(req.query.sellerId as string) : null;
+    const bidderId = req.query.hasOwnProperty("bidderId") ? Number(req.query.bidderId as string) : null;
     const sortBy = req.query.hasOwnProperty("sortBy") ? req.query.sortBy as string : "CLOSING_SOON";
+
+    if (!Number.isInteger(Number(startIndex))
+    || (!Number.isInteger(Number(count)) && count !== null)
+    || (isNaN(sellerId) && sellerId !== null)
+    || (isNaN(bidderId) && bidderId !== null)
+    ) {
+        res.statusMessage = "Bad Request";
+        res.status(400).send();
+        return;
+    }
 
     try {
         let result:Auction[] = [];
@@ -91,6 +101,10 @@ const getAll = async (req: Request, res: Response):Promise<void> => {
             case SortFilters.RESERVE_DESC:
                 result.sort((a, b) => b.reserve - a.reserve)
                 break;
+            default:
+                res.statusMessage = "Bad Request";
+                res.status(400).send();
+                return;
         }
         let endIndex = result.length;
         if (count != null) {
@@ -107,41 +121,42 @@ const getAll = async (req: Request, res: Response):Promise<void> => {
 const create = async (req: Request, res: Response):Promise<void> => {
     if (!req.body.hasOwnProperty("title")) {
         res.statusMessage = "Bad Request";
-        res.status(400).send("Please provide a first name.")
+        res.status(400).send()
         return;
     }
 
     if (!req.body.hasOwnProperty("description")) {
         res.statusMessage = "Bad Request";
-        res.status(400).send("Please provide a last name.")
+        res.status(400).send()
         return
     }
 
     if (!req.body.hasOwnProperty("endDate")) {
         res.statusMessage = "Bad Request";
-        res.status(400).send("Please provide an email address.")
+        res.status(400).send()
         return
     }
 
-    if (!req.body.hasOwnProperty("categoryId")) {
-        res.statusMessage = "Bad Request";
-        res.status(400).send("Please provide a password.")
-        return
-    }
-
-    if (req.body.hasOwnProperty("reserve") && isNaN(Number(req.body.reserve))) {
+    if (!req.body.hasOwnProperty("categoryId") || !Number.isInteger(Number(req.body.categoryId))) {
         res.statusMessage = "Bad Request";
         res.status(400).send()
         return
     }
 
-    const userId = req.params.authenticatedUserId;
+
+    const userId = Number(req.params.authenticatedUserId);
 
     const title = req.body.title;
     const description = req.body.description;
     const endDate = req.body.endDate;
-    const categoryId = req.body.categoryId;
+    const categoryId = Number(req.body.categoryId);
     const reserve = req.body.hasOwnProperty("reserve") ? Number(req.body.reserve) : 1;
+
+    if (!Number.isInteger(reserve)) {
+        res.statusMessage = "Bad Request";
+        res.status(400).send()
+        return
+    }
 
     if (new Date(endDate) < new Date()) {
         res.statusMessage = "Bad Request";
@@ -153,14 +168,14 @@ const create = async (req: Request, res: Response):Promise<void> => {
         const categoryResult = await categories.getCategory(categoryId);
         if (categoryResult == null) {
             res.statusMessage = "Bad Request";
-            res.status(400).send("Category doesn't exist.");
+            res.status(400).send();
             return;
         }
 
-        const result = await auctions.createAuction(title, description, endDate, "", categoryId, reserve, parseInt(userId, 10));
+        const result = await auctions.createAuction(title, description, endDate, "", categoryId, reserve, userId);
         if (result.affectedRows === 0) {
             res.statusMessage = "Bad Request";
-            res.status(400).send("Email must not already be in use.");
+            res.status(400).send();
             return;
         }
 
@@ -174,14 +189,7 @@ const create = async (req: Request, res: Response):Promise<void> => {
 };
 
 const get = async (req: Request, res: Response): Promise<void> => {
-
-    if (isNaN(parseInt(req.params.id, 10))) {
-        res.statusMessage = "Bad Request";
-        res.status(400).send()
-        return;
-    }
-
-    const id = parseInt(req.params.id, 10);
+    const id = Number(req.params.id);
 
     try {
         const result = await auctions.getAuctionById(id);
@@ -199,11 +207,9 @@ const get = async (req: Request, res: Response): Promise<void> => {
 }
 
 const edit = async (req:Request, res:Response):Promise<void> => {
-    const id = parseInt(req.params.id, 10);
+    const id = Number(req.params.id);
     try {
         const originalAuction = await auctions.getAuctionById(id);
-        Logger.debug(originalAuction);
-
 
         if (originalAuction == null) {
             res.statusMessage = "Not Found";
@@ -211,12 +217,18 @@ const edit = async (req:Request, res:Response):Promise<void> => {
             return;
         }
 
-        const authenticatedUserId = parseInt(req.params.authenticatedUserId, 10);
+        const authenticatedUserId = Number(req.params.authenticatedUserId);
         const title = req.body.hasOwnProperty("title") ? req.body.title: originalAuction.title;
-        const reserve = req.body.hasOwnProperty("reserve")? parseInt(req.body.reserve, 10): originalAuction.reserve;
+        const reserve = req.body.hasOwnProperty("reserve")? Number(req.body.reserve): originalAuction.reserve;
         const description = req.body.hasOwnProperty("description")? req.body.description: originalAuction.description;
         const endDate = req.body.hasOwnProperty("endDate")? req.body.endDate: originalAuction.endDate;
-        const categoryId = req.body.hasOwnProperty("categoryId")? req.body.categoryId : originalAuction.categoryId;
+        const categoryId = req.body.hasOwnProperty("categoryId")? Number(req.body.categoryId) : originalAuction.categoryId;
+
+        if (!Number.isInteger(reserve) || !Number.isInteger(categoryId)) {
+            res.statusMessage = "Bad Request"
+            res.status(403).send()
+            return;
+        }
 
         if (originalAuction.sellerId !== authenticatedUserId) {
             res.statusMessage = "Forbidden"
@@ -245,7 +257,7 @@ const edit = async (req:Request, res:Response):Promise<void> => {
 }
 
 const remove = async (req:Request, res:Response):Promise<void> => {
-    const id = parseInt(req.params.id, 10);
+    const id = Number(req.params.id);
     try {
         const originalAuction = await auctions.getAuctionById(id);
 
@@ -255,7 +267,7 @@ const remove = async (req:Request, res:Response):Promise<void> => {
             return;
         }
 
-        const authenticatedUserId = parseInt(req.params.authenticatedUserId, 10);
+        const authenticatedUserId = Number(req.params.authenticatedUserId);
 
         if (originalAuction.sellerId !== authenticatedUserId) {
             res.statusMessage = "Forbidden"
@@ -290,15 +302,8 @@ const getCategories = async (req:Request, res:Response):Promise<void> => {
 }
 
 const getBids = async (req:Request, res:Response):Promise<void> => {
-    Logger.info("Get bids");
-
     try {
-        if (isNaN(parseInt(req.params.id, 10))) {
-            res.statusMessage = "Bad Request";
-            res.status(400).send()
-            return;
-        }
-        const id = parseInt(req.params.id, 10);
+        const id = Number(req.params.id);
         const originalAuction = await auctions.getAuctionById(id);
 
         if (originalAuction == null) {
@@ -321,22 +326,17 @@ const getBids = async (req:Request, res:Response):Promise<void> => {
 
 const placeBid = async (req:Request, res:Response):Promise<void> => {
     try {
-        const authenticatedUserId = parseInt(req.params.authenticatedUserId, 10);
+        const authenticatedUserId = Number(req.params.authenticatedUserId);
 
-        if (req.body.hasOwnProperty("amount") && isNaN(parseInt(req.body.amount, 10))) {
+        if (!req.body.hasOwnProperty("amount") || !Number.isInteger(Number(req.body.amount))) {
             res.statusMessage = "Bad Request";
             res.status(400).send()
             return
         }
 
-        if (isNaN(parseInt(req.params.id, 10))) {
-            res.statusMessage = "Bad Request";
-            res.status(400).send()
-            return;
-        }
+        const amount = Number(req.body.amount);
+        const id = Number(req.params.id);
 
-        const amount = parseInt(req.body.amount, 10);
-        const id = parseInt(req.params.id, 10);
         const originalAuction = await auctions.getAuctionById(id);
 
         if (originalAuction == null) {
@@ -368,15 +368,10 @@ const placeBid = async (req:Request, res:Response):Promise<void> => {
 const getImage = async (req:Request, res:Response):Promise<void> => {
 
     try {
-        if (isNaN(parseInt(req.params.id, 10))) {
-            res.statusMessage = "Bad Request";
-            res.status(400).send()
-            return;
-        }
-        const id = parseInt(req.params.id, 10);
+        const id = Number(req.params.id);
         const auction = await auctions.getAuctionById(id);
 
-        if (auction == null) {
+        if (auction == null || auction.imageFilename.length === 0) {
             res.statusMessage = "Not Found";
             res.status(404).send();
             return;
@@ -393,15 +388,9 @@ const getImage = async (req:Request, res:Response):Promise<void> => {
 
 const setImage = async (req:Request, res:Response):Promise<void> => {
     try {
-        const authenticatedUserId = parseInt(req.params.authenticatedUserId, 10);
+        const authenticatedUserId = Number(req.params.authenticatedUserId);
 
-        if (isNaN(parseInt(req.params.id, 10))) {
-            res.statusMessage = "Bad Request";
-            res.status(400).send()
-            return;
-        }
-
-        const id = parseInt(req.params.id, 10);
+        const id = Number(req.params.id);
         const auction = await auctions.getAuctionById(id);
 
         if (auction == null) {
@@ -415,6 +404,7 @@ const setImage = async (req:Request, res:Response):Promise<void> => {
             res.status(403).send();
             return;
         }
+
         let extention = "";
         if (req.is("image/png")) {
             extention = ".png";
@@ -427,18 +417,29 @@ const setImage = async (req:Request, res:Response):Promise<void> => {
             res.status(400).send();
             return;
         }
-        Logger.debug(req.body);
-        const buf = Buffer.from(req.body.toString('binary'),'binary');
-        fs.writeFile(path.resolve("./storage/images/auction_" + id + extention), buf);
 
-        if (auction.imageFilename.length === 0) {
-            auctions.addImageById("auction_" + id + extention, id);
+        const buf = Buffer.from(req.body.toString('binary'),'binary');
+        let fileId = id;
+        let location = path.resolve("./storage/images/auction_" + fileId + extention);
+        if (auction.imageFilename === null || auction.imageFilename.length === 0) {
             res.statusMessage = "Created";
-            res.status(201).send();
-            return;
+            res.status(201);
+        } else {
+            location = path.resolve("./storage/images/" + auction.imageFilename);
+            fs.unlinkSync(location)
+            location = path.resolve("./storage/images/auction_" + fileId + extention);
+            res.statusMessage = "OK";
+            res.status(200);
         }
-        res.statusMessage = "OK";
-        res.status(200).send();
+        while (fs.existsSync(location)) {
+            fileId += 1;
+            location = path.resolve("./storage/images/auction_" + fileId + extention);
+        }
+
+        auctions.addImageById("auction_" + fileId + extention, id);
+        fs.writeFile(location, buf);
+
+        res.send();
     } catch (err){
         res.statusMessage = "Internal Server Error";
         res.status(500).send();

@@ -7,16 +7,16 @@ import {ResultSetHeader} from "mysql2";
 
 const createUser = async (firstName:string, lastName:string, email:string, password:string): Promise<ResultSetHeader> => {
     const conn = await getPool().getConnection();
-    const query = 'INSERT IGNORE INTO user (first_name, last_name, email, password) VALUES ( ?, ?, ?, ? )';
+    const query = 'INSERT INTO user (first_name, last_name, email, password) VALUES ( ?, ?, ?, ? )';
     const [ result ] = await conn.query( query, [ firstName, lastName, email, password ] );
     conn.release();
     return result;
 };
 
-const login = async (email:string, password:string, token:string): Promise<ResultSetHeader> => {
+const login = async (email:string, token:string): Promise<ResultSetHeader> => {
     const conn = await getPool().getConnection();
-    const query = 'UPDATE user SET auth_token = ? WHERE email = ? AND password = ?';
-    const [ result ] = await conn.query( query, [ token, email, password ] );
+    const query = 'UPDATE user SET auth_token = ? WHERE email = ?';
+    const [ result ] = await conn.query( query, [ token, email ] );
     conn.release();
     return result;
 };
@@ -45,6 +45,14 @@ const getUser = async (id:number): Promise<User> => {
     return result[0];
 }
 
+const getUserByEmail = async (email:string): Promise<User> => {
+    const conn = await getPool().getConnection();
+    const query = 'SELECT * FROM user WHERE email = ?';
+    const [ result ] = await conn.query( query, [ email ] );
+    conn.release();
+    return result[0];
+}
+
 const alterUser = async (id:number, firstName:string, lastName:string, email:string, password:string): Promise<ResultSetHeader> => {
     const conn = await getPool().getConnection();
     const query = 'UPDATE user SET first_name = ?, last_name = ?, email = ?, password = ? WHERE id = ?';
@@ -69,4 +77,4 @@ const deleteImage = async (userId:number): Promise<ResultSetHeader> => {
     return result;
 }
 
-export {createUser, login, logout, getUserByToken, getUser, alterUser, addImageById, deleteImage}
+export {createUser, login, logout, getUserByToken, getUser, getUserByEmail, alterUser, addImageById, deleteImage}

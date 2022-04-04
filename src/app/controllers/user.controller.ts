@@ -143,14 +143,8 @@ const alter = async (req: Request, res: Response):Promise<void> => {
         const id = Number(req.params.id);
         const authId = Number(req.params.authenticatedUserId);
         if (authId !== id) {
-            res.statusMessage = "Unauthorized";
+            res.statusMessage = "Forbidden";
             res.status(403).send();
-            return;
-        }
-
-        if (!req.body.hasOwnProperty("currentPassword")) {
-            res.statusMessage = "Bad Request";
-            res.status(400).send();
             return;
         }
 
@@ -158,7 +152,7 @@ const alter = async (req: Request, res: Response):Promise<void> => {
         const user = userResult;
         const validPassword = await bcrypt.compare(req.body.currentPassword, user.password);
 
-        if (!validPassword) {
+        if (req.body.hasOwnProperty('password') && !validPassword) {
             res.statusMessage = "Forbidden";
             res.status(403).send();
             return;

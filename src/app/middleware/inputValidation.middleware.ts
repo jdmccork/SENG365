@@ -3,7 +3,7 @@ import Logger from '../../config/logger';
 
 const pathId = async (req: Request, res: Response, next: NextFunction):Promise<void> => {
     try {
-        if (req.params.id === null || isNaN(Number(req.params.id)) || !Number.isInteger(Number(req.params.id))) {
+        if (req.params.id === null || isNaN(Number(req.params.id)) || !Number.isInteger(Number(req.params.id)) || Number(req.params.id) < 0) {
             res.statusMessage = "Bad Request";
             res.status(400).send();
             return;

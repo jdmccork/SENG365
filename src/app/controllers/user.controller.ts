@@ -40,7 +40,13 @@ const create = async (req: Request, res: Response):Promise<void> => {
         const lastName = req.body.lastName;
         const email = req.body.email;
         const salt = await bcrypt.genSalt(10);
-        const password = await bcrypt.hash(req.body.password, salt);
+        const password = await bcrypt.hash(String(req.body.password), salt);
+
+        if (firstName.length > 64 || lastName.length > 64 || email.length > 128 || password.length > 256) {
+            res.statusMessage = "Bad Request";
+            res.status(400).send()
+            return
+        }
 
         const user = await users.getUserByEmail(email);
 

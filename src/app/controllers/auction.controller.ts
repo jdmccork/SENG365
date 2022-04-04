@@ -154,7 +154,7 @@ const create = async (req: Request, res: Response):Promise<void> => {
 
     if (!Number.isInteger(reserve)) {
         res.statusMessage = "Bad Request";
-        res.status(400).send()
+        res.status(400).send();
         return
     }
 

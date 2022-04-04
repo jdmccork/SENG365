@@ -8,6 +8,7 @@ import Logger from "../../config/logger";
 
 const getBids = async(auctionId: number): Promise<AuctionBid[]> => {
     const conn = await getPool().getConnection();
+    try {
     const query =
     `SELECT
         user_id AS bidderId, amount, user.first_name AS firstName, user.last_name AS lastName, timestamp
@@ -18,15 +19,23 @@ const getBids = async(auctionId: number): Promise<AuctionBid[]> => {
     const [ result ] = await conn.query( query, [ auctionId ] );
     conn.release();
     return result;
+} catch (err) {
+    conn.release();
+    throw err;
+}
 }
 
 const createBid = async (amount:number, auctionId:number, timestamp:string, userId:number): Promise<ResultSetHeader> => {
-    Logger.debug(timestamp);
     const conn = await getPool().getConnection();
+    try {
     const query = 'INSERT IGNORE INTO auction_bid (amount, auction_id, timestamp, user_id) VALUES ( ?, ?, ?, ? )';
     const [ result ] = await conn.query( query, [ amount, auctionId, timestamp, userId ] );
     conn.release();
     return result;
+} catch (err) {
+    conn.release();
+    throw err;
+}
 };
 
 export { getBids, createBid }
